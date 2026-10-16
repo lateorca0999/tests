@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokémon Box Manager</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        boxbg: '#1a1c23',
+                        panel: '#24283b',
+                        accent: '#7c3aed',
+                        accentHover: '#6d28d9',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Inter & DotGothic16 for gaming feel -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=M+PLUS+Rounded+1c:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'M PLUS Rounded 1c', sans-serif;
+            user-select: none;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1a1c23;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3b4252;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4c566a;
+        }
+        .slot-grid {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            grid-template-rows: repeat(5, minmax(0, 1fr));
+            gap: 10px;
+        }
+        @media (max-width: 768px) {
+            .slot-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                grid-template-rows: repeat(10, minmax(0, 1fr));
+            }
+        }
+        /* Shiny sparkle animation */
+        @keyframes sparkle {
+            0%, 100% { opacity: 0.3; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+        .shiny-sparkle {
+            animation: sparkle 1.5s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-[#12141a] text-gray-100 min-h-screen flex flex-col">
+
+    <!-- Header / Navbar -->
+    <header class="bg-[#1a1c23] border-b border-gray-800 px-4 py-3 flex flex-wrap justify-between items-center gap-4 shadow-lg sticky top-0 z-30">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-red-500 to-amber-400 flex items-center justify-center shadow-md">
+                <i class="fa-solid fa-gamepad text-white text-xl"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg tracking-wider text-white">ポケットボックス管理</h1>
+                <p class="text-xs text-gray-400">Total 32 Boxes • 960 Slots Max</p>
+            </div>
+        </div>
+
+        <!-- Search & Global Actions -->
+        <div class="flex items-center space-x-3 flex-1 max-w-md mx-auto">
+            <div class="relative w-full">
+                <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                </span>
+                <input type="text" id="searchInput" placeholder="ポケモン名、タイプ、ニックネームで検索..." 
+                    class="w-full pl-10 pr-4 py-2 bg-[#24283b] border border-gray-700 rounded-xl text-sm focus:outline-none focus:border-purple-500 transition">
+            </div>
+            <button id="clearSearchBtn" class="hidden px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-xl text-xs font-semibold transition">
+                解除
+            </button>
+        </div>
+
+        <div class="flex items-center space-x-2">
+            <button id="exportBtn" class="px-3 py-2 bg-[#24283b] hover:bg-gray-700 border border-gray-700 rounded-xl text-xs font-semibold flex items-center space-x-2 transition" title="データをファイルにバックアップ">
+                <i class="fa-solid fa-download text-purple-400"></i>
+                <span class="hidden sm:inline">エクスポート</span>
+            </button>
+            <label class="px-3 py-2 bg-[#24283b] hover:bg-gray-700 border border-gray-700 rounded-xl text-xs font-semibold flex items-center space-x-2 cursor-pointer transition" title="データを復元">
+                <i class="fa-solid fa-upload text-blue-400"></i>
+                <span class="hidden sm:inline">インポート</span>
+                <input type="file" id="importFile" accept=".json" class="hidden">
+            </label>
+            <button id="resetAllBtn" class="px-3 py-2 bg-red-900/30 hover:bg-red-900/50 border border-red-700/50 text-red-300 rounded-xl text-xs font-semibold transition" title="全データをリセット">
+                <i class="fa-solid fa-trash-can"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+        
+        <!-- Left Column: Box Navigation & Selector -->
+        <div class="lg:col-span-1 bg-[#1a1c23] border border-gray-800 rounded-2xl p-4 shadow-xl flex flex-col h-[calc(100vh-130px)] sticky top-20">
+            <div class="flex justify-between items-center mb-3 pb-2 border-b border-gray-800">
+                <h2 class="font-bold text-sm text-gray-300 flex items-center space-x-2">
+                    <i class="fa-solid fa-boxes-stacked text-purple-400"></i>
+                    <span>ボックス一覧 (32)</span>
+                </h2>
+                <span id="boxFilledCount" class="text-xs bg-purple-900/40 text-purple-300 px-2 py-0.5 rounded-full font-medium">0 / 960</span>
+            </div>
+
+            <!-- Box List -->
+            <div id="boxListContainer" class="flex-1 overflow-y-auto space-y-1.5 pr-1">
+                <!-- Dynamically generated list of 32 boxes -->
+            </div>
+        </div>
+
+        <!-- Right Column: Current Box View & Slot Grid -->
+        <div class="lg:col-span-3 flex flex-col space-y-4">
+            
+            <!-- Box Header / Controls -->
+            <div class="bg-[#1a1c23] border border-gray-800 rounded-2xl p-4 shadow-xl flex flex-wrap justify-between items-center gap-4">
+                <div class="flex items-center space-x-3">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xs uppercase tracking-wider text-gray-400 font-semibold">BOX</span>
+                        <select id="boxSelectDropdown" class="bg-[#24283b] border border-gray-700 font-bold px-3 py-1.5 rounded-xl text-sm focus:outline-none focus:border-purple-500">
+                            <!-- Options 1 to 32 -->
+                        </select>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <input type="text" id="boxNameInput" placeholder="ボックス名..." 
+                            class="bg-[#24283b] border border-gray-700 px-3 py-1.5 rounded-xl text-sm font-semibold text-white focus:outline-none focus:border-purple-500 w-36 sm:w-48">
+                        <button id="saveBoxNameBtn" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded-xl text-xs font-bold transition shadow-md">
+                            変更
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-2">
+                    <button id="sortBoxBtn" class="px-3 py-2 bg-[#24283b] hover:bg-gray-700 border border-gray-700 rounded-xl text-xs font-medium flex items-center space-x-1.5 transition">
+                        <i class="fa-solid fa-arrow-down-wide-short text-amber-400"></i>
+                        <span>整理・整頓</span>
+                    </button>
+                    <button id="clearBoxBtn" class="px-3 py-2 bg-red-900/20 hover:bg-red-900/40 border border-red-800/40 text-red-300 rounded-xl text-xs font-medium flex items-center space-x-1.5 transition">
+                        <i class="fa-solid fa-eraser"></i>
+                        <span>ボックスを空にする</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 30-Slot Grid Area -->
+            <div class="bg-[#1a1c23] border border-gray-800 rounded-2xl p-4 md:p-6 shadow-xl flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <span id="currentBoxTitleDisplay" class="font-bold text-lg text-purple-300">Box 1: ボックス1</span>
+                    <span class="text-xs text-gray-400">ドラッグ＆ドロップ、またはクリックしてポケモンを移動・編集</span>
+                </div>
+
+                <!-- Grid -->
+                <div id="slotGrid" class="slot-grid w-full aspect-auto min-h-[480px]">
+                    <!-- 30 Slots generated by JS -->
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Pokemon Edit / Create Modal -->
+    <div id="pokemonModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-[#1a1c23] border border-gray-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative animate-in fade-in zoom-in duration-200">
+            <button id="closeModalBtn" class="absolute top-4 right-4 text-gray-400 hover:text-white text-lg">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <h3 id="modalTitle" class="text-lg font-bold mb-4 flex items-center space-x-2">
+                <i class="fa-solid fa-paw text-purple-400"></i>
+                <span>ポケモンの登録・編集</span>
+            </h3>
+
+            <form id="pokemonForm" class="space-y-4">
+                <input type="hidden" id="modalBoxIndex">
+                <input type="hidden" id="modalSlotIndex">
+
+                <!-- Basic Info -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-400 mb-1">ポケモン名</label>
+                        <input type="text" id="pokeName" required placeholder="例: ピカチュウ" 
+                            class="w-full bg-[#24283b] border border-gray-700 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-400 mb-1">ニックネーム</label>
+                        <input type="text" id="pokeNickname" placeholder="例: ニック" 
+                            class="w-full bg-[#24283b] border border-gray-700 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-purple-500">
+                    </div>
+                </div>
+
+                <!-- Types -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-400 mb-1">タイプ1</label>
+                        <select id="pokeType1" class="w-full bg-[#24283b] border border-gray-700 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-purple-500">
+                            <option value="ノーマル">ノーマル</option>
+                            <option value="ほのお">ほのお</option>
+                            <option value="みず">みず</option>
+                            <option value="でんき">でんき</option>
+                            <option value="くさ">くさ</option>
+                            <option value="こおり">こおり</option>
+                            <option value="かくとう">かくとう</option>
+                            <option value="どく">どく</option>
+                            <option value="じめん">じめん</option>
+                            <option value="ひこう">ひこう</option>
+                            <option value="エスパー">エスパー</option>
+                            <option value="むし">むし</option>
+                            <option value="いわ">いわ</option>
+                            <option value="ゴースト">ゴースト</option>
+                            <option value="ドラゴン">ドラゴン</option>
+                            <option value="あく">あく</option>
+                            <option value="はがね">はがね</option>
+                            <option value="フェアリー">フェアリー</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-400 mb-1">タイプ2 (任意)</label>
+                        <select id="pokeType2" class="w-full bg-[#24283b] border border-gray-700 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-purple-500">
+                            <option value="">なし</option>
+                            <option value="ノーマル">ノーマル</option>
+                            <option value="ほのお">ほのお</option>
+                            <option value="みず">みず</option>
+                            <option value="でんき">でんき</option>
+                            <option value="くさ">くさ</option>
+                            <option value="こおり">こおり</option>
+                            <option value="かくとう">かくとう</option>
+                            <option value="どく">どく</option>
+                            <option value="じめん">じめん</option>
+                            <option value="ひこう">ひこう</option>
+                            <option value="エスパー">エスパー</option>
+                            <option value="むし">むし</option>
+                            <option value="いわ">いわ</option>
+                            <option value="ゴースト">ゴースト</option>
+                            <option value="ドラゴン">ドラゴン</option>
+                            <option value="あく">あく</option>
+                            <option value="はがね">はがね</option>
+                            <option value="フェアリー">フェアリー</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Level & Shiny -->
+                <div class="grid grid-cols-2 gap-3 items-center">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-400 mb-1">レベル</label>
+                        <input type="number" id="pokeLevel" min="1" max="100" value="50" 
+                            class="w-full bg-[#24283b] border border-gray-700 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div class="flex items-center pt-5">
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="pokeShiny" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                            <span class="ml-3 text-sm font-semibold text-amber-300 flex items-center space-x-1">
+                                <i class="fa-solid fa-sparkles"></i>
+                                <span>色違い (Shiny)</span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Note / Memo -->
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">メモ・技など</label>
+                    <input type="text" id="pokeNote" placeholder="例: 意地っ張り / 6V / テラスタイプ: ほのお" 
+                        class="w-full bg-[#24283b] border border-gray-700 px-3 py-2 rounded-xl text-sm focus:outline-none focus:border-purple-500">
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex space-x-3 pt-3">
+                    <button type="button" id="deletePokeBtn" class="hidden px-4 py-2.5 bg-red-900/40 hover:bg-red-900/70 border border-red-700/50 text-red-300 rounded-xl text-sm font-semibold transition flex-1">
+                        逃がす (削除)
+                    </button>
+                    <button type="submit" class="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 rounded-xl text-sm font-bold transition shadow-lg flex-1">
+                        決定・保存
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Message / Toast Notification Container -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-purple-900 text-white px-4 py-2 rounded-xl shadow-2xl z-50 text-sm transform translate-y-20 opacity-0 transition-all duration-300 flex items-center space-x-2">
+        <i class="fa-solid fa-circle-check text-green-400"></i>
+        <span id="toastMessage">保存しました</span>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // --- Type Colors Configuration ---
+        const typeColors = {
+            'ノーマル': 'bg-gray-500 text-white',
+            'ほのお': 'bg-orange-600 text-white',
+            'みず': 'bg-blue-600 text-white',
+            'でんき': 'bg-yellow-500 text-gray-900 font-bold',
+            'くさ': 'bg-green-600 text-white',
+            'こおり': 'bg-cyan-500 text-gray-900 font-bold',
+            'かくとう': 'bg-red-700 text-white',
+            'どく': 'bg-purple-700 text-white',
+            'じめん': 'bg-amber-700 text-white',
+            'ひこう': 'bg-indigo-400 text-white',
+            'エスパー': 'bg-pink-600 text-white',
+            'むし': 'bg-lime-600 text-white',
+            'いわ': 'bg-yellow-700 text-white',
+            'ゴースト': 'bg-purple-900 text-white',
+            'ドラゴン': 'bg-indigo-700 text-white',
+            'あく': 'bg-gray-800 text-white border border-gray-600',
+            'はがね': 'bg-slate-500 text-white',
+            'フェアリー': 'bg-pink-400 text-gray-900 font-bold'
+        };
+
+        // --- State Management ---
+        const TOTAL_BOXES = 32;
+        const SLOT_COUNT = 30; // 6x5 grid
+        let currentBoxIndex = 0;
+        let searchKeyword = '';
+        let boxesData = [];
+
+        // Drag and Drop state
+        let draggedData = null; // { fromBox, fromSlot }
+
+        // --- Initialization ---
+        function initApp() {
+            loadData();
+            renderBoxList();
+            renderBoxSelectDropdown();
+            renderCurrentBox();
+            updateTotalFilledCount();
+
+            // Event Listeners
+            document.getElementById('boxSelectDropdown').addEventListener('change', (e) => {
+                currentBoxIndex = parseInt(e.target.value);
+                document.getElementById('boxListContainer').querySelectorAll('button').forEach((btn, idx) => {
+                    if (idx === currentBoxIndex) {
+                        btn.className = 'w-full text-left px-3 py-2 rounded-xl text-sm font-bold bg-purple-600 text-white shadow-md flex justify-between items-center transition';
+                    } else {
+                        btn.className = 'w-full text-left px-3 py-2 rounded-xl text-sm font-medium text-gray-400 hover:bg-[#24283b] hover:text-white flex justify-between items-center transition';
+                    }
+                });
+                renderCurrentBox();
+            });
+
+            document.getElementById('saveBoxNameBtn').addEventListener('click', () => {
+                const newName = document.getElementById('boxNameInput').value.trim();
+                if (newName) {
+                    boxesData[currentBoxIndex].name = newName;
+                    saveData();
+                    renderBoxList();
+                    renderCurrentBox();
+                    showToast('ボックス名を変更しました');
+                }
+            });
+
+            document.getElementById('clearBoxBtn').addEventListener('click', () => {
+                if (confirm(`本当に「Box ${currentBoxIndex + 1}: ${boxesData[currentBoxIndex].name}」の中身をすべて空にしますか？`)) {
+                    boxesData[currentBoxIndex].slots = new Array(SLOT_COUNT).fill(null);
+                    saveData();
+                    renderBoxList();
+                    renderCurrentBox();
+                    updateTotalFilledCount();
+                    showToast('ボックスを空にしました');
+                }
+            });
+
+            document.getElementById('sortBoxBtn').addEventListener('click', () => {
+                const currentSlots = boxesData[currentBoxIndex].slots;
+                const filled = currentSlots.filter(s => s !== null);
+                const empty = new Array(SLOT_COUNT - filled.length).fill(null);
+                boxesData[currentBoxIndex].slots = [...filled, ...empty];
+                saveData();
+                renderCurrentBox();
+                showToast('ボックス内を整理しました');
+            });
+
+            // Search handling
+            const searchInput = document.getElementById('searchInput');
+            const clearSearchBtn = document.getElementById('clearSearchBtn');
+            searchInput.addEventListener('input', (e) => {
+                searchKeyword = e.target.value.trim().toLowerCase();
+                if (searchKeyword) {
+                    clearSearchBtn.classList.remove('hidden');
+                } else {
+                    clearSearchBtn.classList.add('hidden');
+                }
+                renderCurrentBox();
+            });
+
+            clearSearchBtn.addEventListener('click', () => {
+                searchInput.value = '';
+                searchKeyword = '';
+                clearSearchBtn.classList.add('hidden');
+                renderCurrentBox();
+            });
+
+            // Modal Close & Form Submit
+            document.getElementById('closeModalBtn').addEventListener('click', closeModal);
+            document.getElementById('pokemonForm').addEventListener('submit', handlePokemonFormSubmit);
+            document.getElementById('deletePokeBtn').addEventListener('click', handleDeletePokemon);
+
+            // Global Actions
+            document.getElementById('resetAllBtn').addEventListener('click', () => {
+                if (confirm('【警告】すべてのボックスデータが初期化されます。よろしいですか？')) {
+                    localStorage.removeItem('pokemon_boxes_data_v1');
+                    boxesData = [];
+                    initDefaultData();
+                    renderBoxList();
+                    renderBoxSelectDropdown();
+                    renderCurrentBox();
+                    updateTotalFilledCount();
+                    showToast('すべてのデータを初期化しました');
+                }
+            });
+
+            document.getElementById('exportBtn').addEventListener('click', exportDataJson);
+            document.getElementById('importFile').addEventListener('change', importDataJson);
+        }
+
+        // --- Data Persistence ---
+        function initDefaultData() {
+            for (let i = 0; i < TOTAL_BOXES; i++) {
+                boxesData.push({
+                    name: `ボックス ${i + 1}`,
+                    slots: new Array(SLOT_COUNT).fill(null)
+                });
+            }
+            // Add sample data to Box 1 for demonstration
+            boxesData[0].slots[0] = { name: 'ピカチュウ', nickname: 'ピカ', type1: 'でんき', type2: '', level: 25, shiny: true, note: '初期相棒' };
+            boxesData[0].slots[1] = { name: 'リザードン', nickname: 'フレア', type1: 'ほのお', type2: 'ひこう', level: 78, shiny: false, note: 'メガ進化用' };
+            boxesData[0].slots[2] = { name: 'ゲッコウガ', nickname: 'ゲッコー', type1: 'みず', type2: 'あく', level: 65, shiny: true, note: '変幻自在' };
+            saveData();
+        }
+
+        function loadData() {
+            const saved = localStorage.getItem('pokemon_boxes_data_v1');
+            if (saved) {
+                try {
+                    boxesData = JSON.parse(saved);
+                    // Ensure correct size
+                    if (boxesData.length !== TOTAL_BOXES) {
+                        initDefaultData();
+                    }
+                } catch (e) {
+                    initDefaultData();
+                }
+            } else {
+                initDefaultData();
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem('pokemon_boxes_data_v1', JSON.stringify(boxesData));
+        }
+
+        // --- Rendering Functions ---
+        function renderBoxList() {
+            const container = document.getElementById('boxListContainer');
+            container.innerHTML = '';
+
+            boxesData.forEach((box, index) => {
+                const filledCount = box.slots.filter(s => s !== null).length;
+                const isSelected = index === currentBoxIndex;
+
+                const btn = document.createElement('button');
+                btn.className = isSelected 
+                    ? 'w-full text-left px-3 py-2 rounded-xl text-sm font-bold bg-purple-600 text-white shadow-md flex justify-between items-center transition'
+                    : 'w-full text-left px-3 py-2 rounded-xl text-sm font-medium text-gray-400 hover:bg-[#24283b] hover:text-white flex justify-between items-center transition';
+                
+                btn.innerHTML = `
+                    <span class="truncate pr-2">Box ${index + 1}: ${escapeHtml(box.name)}</span>
+                    <span class="text-xs px-2 py-0.5 rounded-full ${filledCount > 0 ? (isSelected ? 'bg-purple-800 text-purple-200' : 'bg-gray-800 text-gray-300') : 'text-gray-600'}">${filledCount}/30</span>
+                `;
+
+                btn.addEventListener('click', () => {
+                    currentBoxIndex = index;
+                    document.getElementById('boxSelectDropdown').value = index;
+                    renderBoxList();
+                    renderCurrentBox();
+                });
+
+                container.appendChild(btn);
+            });
+        }
+
+        function renderBoxSelectDropdown() {
+            const select = document.getElementById('boxSelectDropdown');
+            select.innerHTML = '';
+            boxesData.forEach((box, index) => {
+                const opt = document.createElement('option');
+                opt.value = index;
+                opt.textContent = `Box ${index + 1}: ${box.name}`;
+                select.appendChild(opt);
+            });
+            select.value = currentBoxIndex;
+        }
+
+        function renderCurrentBox() {
+            const box = boxesData[currentBoxIndex];
+            document.getElementById('boxNameInput').value = box.name;
+            document.getElementById('currentBoxTitleDisplay').textContent = `Box ${currentBoxIndex + 1}: ${box.name}`;
+
+            const grid = document.getElementById('slotGrid');
+            grid.innerHTML = '';
+
+            box.slots.forEach((poke, slotIndex) => {
+                const slotDiv = document.createElement('div');
+                
+                // Search filter check
+                let matchesSearch = true;
+                if (searchKeyword && poke) {
+                    const q = searchKeyword;
+                    const matchName = poke.name.toLowerCase().includes(q);
+                    const matchNick = poke.nickname && poke.nickname.toLowerCase().includes(q);
+                    const matchType1 = poke.type1 && poke.type1.toLowerCase().includes(q);
+                    const matchType2 = poke.type2 && poke.type2.toLowerCase().includes(q);
+                    const matchNote = poke.note && poke.note.toLowerCase().includes(q);
+                    matchesSearch = matchName || matchNick || matchType1 || matchType2 || matchNote;
+                }
+
+                slotDiv.className = `relative aspect-square bg-[#24283b] border ${poke ? (matchesSearch ? 'border-gray-600 hover:border-purple-500 shadow-md' : 'border-gray-800 opacity-30') : 'border-gray-800 border-dashed hover:border-gray-600'} rounded-2xl p-2 flex flex-col justify-between items-center cursor-pointer transition group`;
+                slotDiv.setAttribute('draggable', poke ? 'true' : 'false');
+                slotDiv.dataset.boxIndex = currentBoxIndex;
+                slotDiv.dataset.slotIndex = slotIndex;
+
+                if (poke) {
+                    // Type badge styling
+                    const type1Class = typeColors[poke.type1] || 'bg-gray-600 text-white';
+                    let type2Html = '';
+                    if (poke.type2) {
+                        const type2Class = typeColors[poke.type2] || 'bg-gray-600 text-white';
+                        type2Html = `<span class="text-[9px] px-1.5 py-0.5 rounded-md ${type2Class} truncate max-w-full">${poke.type2}</span>`;
+                    }
+
+                    slotDiv.innerHTML = `
+                        <!-- Top Info -->
+                        <div class="w-full flex justify-between items-center text-[10px] text-gray-400">
+                            <span class="font-bold ${poke.shiny ? 'text-amber-400' : 'text-gray-300'}">
+                                ${poke.shiny ? '<i class="fa-solid fa-sparkles shiny-sparkle"></i> ' : ''}Lv.${poke.level}
+                            </span>
+                            <span class="text-gray-500 text-[9px]">#${slotIndex + 1}</span>
+                        </div>
+
+                        <!-- Center Avatar / Name -->
+                        <div class="flex flex-col items-center justify-center my-auto w-full">
+                            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600/30 to-indigo-600/30 flex items-center justify-center mb-1 text-purple-300 font-bold text-sm shadow-inner group-hover:scale-110 transition">
+                                <i class="fa-solid fa-paw"></i>
+                            </div>
+                            <span class="text-xs font-bold text-white truncate max-w-full px-1">${escapeHtml(poke.nickname || poke.name)}</span>
+                            ${poke.nickname ? `<span class="text-[9px] text-gray-400 truncate max-w-full">${escapeHtml(poke.name)}</span>` : ''}
+                        </div>
+
+                        <!-- Bottom Type Badges -->
+                        <div class="w-full flex justify-center space-x-1 mt-1">
+                            <span class="text-[9px] px-1.5 py-0.5 rounded-md ${type1Class} truncate max-w-full">${poke.type1}</span>
+                            ${type2Html}
+                        </div>
+                    `;
+
+                    // Drag and Drop Events
+                    slotDiv.addEventListener('dragstart', (e) => {
+                        draggedData = { fromBox: currentBoxIndex, fromSlot: slotIndex };
+                        e.dataTransfer.setData('text/plain', JSON.stringify(draggedData));
+                        slotDiv.classList.add('opacity-50');
+                    });
+
+                    slotDiv.addEventListener('dragend', () => {
+                        slotDiv.classList.remove('opacity-50');
+                    });
+
+                } else {
+                    // Empty slot
+                    slotDiv.innerHTML = `
+                        <div class="w-full h-full flex items-center justify-center text-gray-600 group-hover:text-purple-400 transition">
+                            <i class="fa-solid fa-plus text-lg"></i>
+                        </div>
+                    `;
+                }
+
+                // Drag over & Drop target
+                slotDiv.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    slotDiv.classList.add('border-purple-500', 'bg-[#2d3246]');
+                });
+
+                slotDiv.addEventListener('dragleave', () => {
+                    slotDiv.classList.remove('border-purple-500', 'bg-[#2d3246]');
+                });
+
+                slotDiv.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    slotDiv.classList.remove('border-purple-500', 'bg-[#2d3246]');
+                    
+                    try {
+                        const raw = e.dataTransfer.getData('text/plain');
+                        if (!raw) return;
+                        const source = JSON.parse(raw);
+                        movePokemon(source.fromBox, source.fromSlot, currentBoxIndex, slotIndex);
+                    } catch (err) {
+                        console.error(err);
+                    }
+                });
+
+                // Click to Edit or Create
+                slotDiv.addEventListener('click', () => {
+                    openModal(currentBoxIndex, slotIndex, poke);
+                });
+
+                grid.appendChild(slotDiv);
+            });
+
+            updateTotalFilledCount();
+        }
+
+        function updateTotalFilledCount() {
+            let total = 0;
+            boxesData.forEach(box => {
+                total += box.slots.filter(s => s !== null).length;
+            });
+            document.getElementById('boxFilledCount.textContent') // placeholder fix
+            document.getElementById('boxFilledCount').textContent = `${total} / 960`;
+        }
+
+        // --- Pokémon Movement Logic ---
+        function movePokemon(fromBox, fromSlot, toBox, toSlot) {
+            if (fromBox === toBox && fromSlot === toSlot) return;
+
+            const sourcePoke = boxesData[fromBox].slots[fromSlot];
+            const targetPoke = boxesData[toBox].slots[toSlot];
+
+            // Swap or Move
+            boxesData[toBox].slots[toSlot] = sourcePoke;
+            boxesData[fromBox].slots[fromSlot] = targetPoke;
+
+            saveData();
+            renderBoxList();
+            renderCurrentBox();
+            showToast('ポケモンを移動しました');
+        }
+
+        // --- Modal Handling ---
+        function openModal(boxIndex, slotIndex, poke) {
+            document.getElementById('modalBoxIndex').value = boxIndex;
+            document.getElementById('modalSlotIndex').value = slotIndex;
+
+            const deleteBtn = document.getElementById('deletePokeBtn');
+            const titleEl = document.getElementById('modalTitle');
+
+            if (poke) {
+                titleEl.innerHTML = `<i class="fa-solid fa-pen-to-square text-purple-400"></i><span>ポケモンの編集 (Box ${boxIndex + 1} - #${slotIndex + 1})</span>`;
+                document.getElementById('pokeName').value = poke.name || '';
+                document.getElementById('pokeNickname').value = poke.nickname || '';
+                document.getElementById('pokeType1').value = poke.type1 || 'ノーマル';
+                document.getElementById('pokeType2').value = poke.type2 || '';
+                document.getElementById('pokeLevel').value = poke.level || 50;
+                document.getElementById('pokeShiny').checked = !!poke.shiny;
+                document.getElementById('pokeNote').value = poke.note || '';
+                deleteBtn.classList.remove('hidden');
+            } else {
+                titleEl.innerHTML = `<i class="fa-solid fa-plus text-purple-400"></i><span>新しいポケモンを登録 (Box ${boxIndex + 1} - #${slotIndex + 1})</span>`;
+                document.getElementById('pokemonForm').reset();
+                document.getElementById('pokeLevel').value = 50;
+                deleteBtn.classList.add('hidden');
+            }
+
+            document.getElementById('pokemonModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('pokemonModal').classList.add('hidden');
+        }
+
+        function handlePokemonFormSubmit(e) {
+            e.preventDefault();
+            const boxIndex = parseInt(document.getElementById('modalBoxIndex').value);
+            const slotIndex = parseInt(document.getElementById('modalSlotIndex').value);
+
+            const newPoke = {
+                name: document.getElementById('pokeName').value.trim(),
+                nickname: document.getElementById('pokeNickname').value.trim(),
+                type1: document.getElementById('pokeType1').value,
+                type2: document.getElementById('pokeType2').value,
+                level: parseInt(document.getElementById('pokeLevel').value) || 1,
+                shiny: document.getElementById('pokeShiny').checked,
+                note: document.getElementById('pokeNote').value.trim()
+            };
+
+            boxesData[boxIndex].slots[slotIndex] = newPoke;
+            saveData();
+            closeModal();
+            renderBoxList();
+            renderCurrentBox();
+            showToast('ポケモンを保存しました');
+        }
+
+        function handleDeletePokemon() {
+            const boxIndex = parseInt(document.getElementById('modalBoxIndex').value);
+            const slotIndex = parseInt(document.getElementById('modalSlotIndex').value);
+
+            boxesData[boxIndex].slots[slotIndex] = null;
+            saveData();
+            closeModal();
+            renderBoxList();
+            renderCurrentBox();
+            showToast('ポケモンを逃がしました');
+        }
+
+        // --- Import / Export / Toast Helpers ---
+        function exportDataJson() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(boxesData, null, 2));
+            const dlAnchor = document.createElement('a');
+            dlAnchor.setAttribute("href", dataStr);
+            dlAnchor.setAttribute("download", `pokemon_boxes_backup_${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(dlAnchor);
+            dlAnchor.click();
+            dlAnchor.remove();
+            showToast('バックアップファイルをダウンロードしました');
+        }
+
+        function importDataJson(e) {
+            const fileReader = new FileReader();
+            if (e.target.files[0]) {
+                fileReader.readAsText(e.target.files[0], "UTF-8");
+                fileReader.onload = (event) => {
+                    try {
+                        const parsed = JSON.parse(event.target.result);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            boxesData = parsed;
+                            saveData();
+                            renderBoxList();
+                            renderBoxSelectDropdown();
+                            renderCurrentBox();
+                            showToast('データを正常にインポートしました');
+                        } else {
+                            alert('無効なJSONファイルです。');
+                        }
+                    } catch (err) {
+                        alert('ファイルの読み込みに失敗しました。');
+                    }
+                };
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMessage').textContent = message;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+
+        // Run on load
+        window.onload = initApp;
+    </script>
+</body>
+</html>
